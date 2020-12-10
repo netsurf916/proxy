@@ -65,18 +65,18 @@ func main() {
 	// Initialize the filter
 	if !Socks5Ctx.DomainFilter.LoadFile(*blacklistPtr) {
 		// Load some external blacklists to create the initial list
-		/*
-			ExternalLists := []string{
-				"https://mirror1.malwaredomains.com/files/justdomains",
-				"http://www.malwaredomainlist.com/hostslist/hosts.txt"
-			}
-			ok, count := Socks5Ctx.DomainFilter.LoadHTTP("")
+		ExternalLists := []string{
+			"https://mirror1.malwaredomains.com/files/justdomains",
+			"http://www.malwaredomainlist.com/hostslist/hosts.txt",
+		}
+		for _, s := range ExternalLists {
+			ok, count := Socks5Ctx.DomainFilter.LoadHTTP(s)
 			if ok {
-				fmt.Printf(" [+] Loaded %d domains from: \"https://mirror1.malwaredomains.com/files/justdomains\"\n", count)
+				fmt.Printf(" [+] Loaded %d domains from: \"%s\"\n", count, s)
 			} else {
-				fmt.Printf(" [!] Error loading blacklist: \"https://mirror1.malwaredomains.com/files/justdomains\"\n")
+				fmt.Printf(" [!] Error loading blacklist: \"%s\"\n", s)
 			}
-		*/
+		}
 	}
 	if len(*updateblacklistPtr) > 0 {
 		ok, count := Socks5Ctx.DomainFilter.LoadListFile(*updateblacklistPtr)
@@ -105,5 +105,8 @@ func main() {
 	go Socks5Ctx.HandleClients()
 
 	// Listen for inbound connections
-	Socks5Ctx.Listen()
+	err = Socks5Ctx.Listen()
+	if err != nil {
+		fmt.Printf(" [!] %s\n", err.Error())
+	}
 }
