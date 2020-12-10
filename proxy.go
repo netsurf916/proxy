@@ -67,7 +67,6 @@ func main() {
 		// Load some external blacklists to create the initial list
 		ExternalLists := []string{
 			"https://mirror1.malwaredomains.com/files/justdomains",
-			"http://www.malwaredomainlist.com/hostslist/hosts.txt",
 		}
 		for _, s := range ExternalLists {
 			ok, count := Socks5Ctx.DomainFilter.LoadHTTP(s)
