@@ -6,14 +6,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
 	"os/signal"
 	"proxy/filter"
 	"strconv"
+	"sync"
 	"syscall"
-	"time"
 )
 
 // Context for Socks5 server
@@ -120,23 +121,24 @@ type Connection struct {
 	Connection net.Conn
 	Reader     *bufio.Reader
 	Writer     *bufio.Writer
-	Data       chan byte
+	ReadCount  uint64
 }
 
-// ReceiveData from the connection
-func (ctx *Connection) ReceiveData() {
-	defer close(ctx.Data)
+// CopyData between connections
+func (ctx *Connection) CopyData(other *Connection, wait *sync.WaitGroup) {
+	defer wait.Done()
 	for {
-		data, err := ctx.Reader.ReadByte()
-		if err != nil {
+		n, err := io.Copy(ctx.Writer, other.Reader)
+		if err != nil || n <= 0 {
 			return
 		}
-		ctx.Data <- data
+		other.ReadCount += uint64(n)
 	}
 }
 
 // ClientCtx for client connections
 type ClientCtx struct {
+	sync.Mutex
 	Ctx         Context
 	Client      Connection
 	Remote      Connection
@@ -628,49 +630,20 @@ func (ctx *ClientCtx) processClient() {
 		}
 	}
 
-	// Channels for receive threads
-	ctx.Client.Data = make(chan byte, 4096)
-	ctx.Remote.Data = make(chan byte, 4096)
-
 	// Start threads to receive data from the client and remote connections
-	go ctx.Client.ReceiveData()
-	go ctx.Remote.ReceiveData()
+	var wait sync.WaitGroup
+	wait.Add(2)
+	go ctx.Client.CopyData(&ctx.Remote, &wait)
+	go ctx.Remote.CopyData(&ctx.Client, &wait)
 
-	// Loop and wait for new data
-	clientCount := uint64(0)
-	remoteCount := uint64(0)
-	for {
-		select {
-		case dataClient, ok := <-ctx.Client.Data:
-			if ok != true {
-				if ctx.Ctx.Logger != nil {
-					if len(ctx.Proxy.Host) > 0 {
-						ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed (C): %s -> [%s]%s:%d (%v:%v bytes)\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Proxy.Host, ctx.Remote.Host, ctx.Remote.Port, clientCount, remoteCount)
-					} else {
-						ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed (C): %s -> %s:%d (%v:%v bytes)\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Remote.Host, ctx.Remote.Port, clientCount, remoteCount)
-					}
-				}
-				return
-			}
-			clientCount++
-			ctx.Remote.Writer.Write([]byte{dataClient})
-		case dataRemote, ok := <-ctx.Remote.Data:
-			if ok != true {
-				if ctx.Ctx.Logger != nil {
-					if len(ctx.Proxy.Host) > 0 {
-						ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed (R): %s -> [%s]%s:%d (%v:%v bytes)\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Proxy.Host, ctx.Remote.Host, ctx.Remote.Port, clientCount, remoteCount)
-					} else {
-						ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed (R): %s -> %s:%d (%v:%v bytes)\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Remote.Host, ctx.Remote.Port, clientCount, remoteCount)
-					}
-				}
-				return
-			}
-			remoteCount++
-			ctx.Client.Writer.Write([]byte{dataRemote})
-		default:
-			ctx.Client.Writer.Flush()
-			ctx.Remote.Writer.Flush()
-			time.Sleep(25 * time.Millisecond)
+	// Wait for threads to finish
+	wait.Wait()
+
+	if ctx.Ctx.Logger != nil {
+		if len(ctx.Proxy.Host) > 0 {
+			ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed: %s -> [%s]%s:%d (%v:%v bytes)\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Proxy.Host, ctx.Remote.Host, ctx.Remote.Port, ctx.Client.ReadCount, ctx.Remote.ReadCount)
+		} else {
+			ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed: %s -> %s:%d (%v:%v bytes)\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Remote.Host, ctx.Remote.Port, ctx.Client.ReadCount, ctx.Remote.ReadCount)
 		}
 	}
 }
