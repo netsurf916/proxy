@@ -298,7 +298,7 @@ func (ctx *ClientCtx) processOutbound() (err error) {
 
 	// If no proxy list is available, connect to the destination directly and return
 	if len(ctx.Ctx.Proxies.Hosts) == 0 {
-		ctx.Remote.Connection, err = net.Dial("tcp", ctx.Remote.Host+":"+strconv.Itoa(ctx.Remote.Port))
+		ctx.Remote.Connection, err = net.Dial("tcp", net.JoinHostPort(ctx.Remote.Host, strconv.Itoa(ctx.Remote.Port)))
 		if err == nil {
 			ctx.Remote.Reader = bufio.NewReader(ctx.Remote.Connection)
 			ctx.Remote.Writer = bufio.NewWriter(ctx.Remote.Connection)
@@ -347,11 +347,11 @@ func (ctx *ClientCtx) processOutbound() (err error) {
 
 	// Connect to proxy
 	if ctx.Proxy.UseTLS {
-		ctx.Remote.Connection, err = tls.Dial("tcp", ctx.Proxy.Host+":"+strconv.Itoa(ctx.Proxy.Port), &tls.Config{
+		ctx.Remote.Connection, err = tls.Dial("tcp", net.JoinHostPort(ctx.Proxy.Host, strconv.Itoa(ctx.Proxy.Port)), &tls.Config{
 			//InsecureSkipVerify: true,
 		})
 	} else {
-		ctx.Remote.Connection, err = net.Dial("tcp", ctx.Proxy.Host+":"+strconv.Itoa(ctx.Proxy.Port))
+		ctx.Remote.Connection, err = net.Dial("tcp", net.JoinHostPort(ctx.Proxy.Host, strconv.Itoa(ctx.Proxy.Port)))
 	}
 	if err != nil {
 		// Respond with general error (0x01)
