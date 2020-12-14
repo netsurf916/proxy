@@ -73,6 +73,15 @@ func (ctx *Context) HandleClients() {
 		if ok == false {
 			return
 		}
+		host, port, err := net.SplitHostPort(client.Client.Connection.RemoteAddr().String())
+		if err != nil {
+			return
+		}
+		client.Client.Host = host
+		client.Client.Port, err = strconv.Atoi(port)
+		if err != nil {
+			return
+		}
 		go client.processClient()
 	}
 }
@@ -624,9 +633,9 @@ func (ctx *ClientCtx) processClient() {
 	// Create buffered IO reader/writers
 	if ctx.Ctx.Logger != nil {
 		if len(ctx.Proxy.Host) > 0 {
-			ctx.Ctx.Logger <- fmt.Sprintf(" [+] Opened: %s -> [%s]%s:%d\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Proxy.Host, ctx.Remote.Host, ctx.Remote.Port)
+			ctx.Ctx.Logger <- fmt.Sprintf(" [+] Opened: [%s]:%d -> [%s]%s:%d\n", ctx.Client.Host, ctx.Client.Port, ctx.Proxy.Host, ctx.Remote.Host, ctx.Remote.Port)
 		} else {
-			ctx.Ctx.Logger <- fmt.Sprintf(" [+] Opened: %s -> %s:%d\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Remote.Host, ctx.Remote.Port)
+			ctx.Ctx.Logger <- fmt.Sprintf(" [+] Opened: [%s]:%d -> %s:%d\n", ctx.Client.Host, ctx.Client.Port, ctx.Remote.Host, ctx.Remote.Port)
 		}
 	}
 
@@ -641,9 +650,9 @@ func (ctx *ClientCtx) processClient() {
 
 	if ctx.Ctx.Logger != nil {
 		if len(ctx.Proxy.Host) > 0 {
-			ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed: %s -> [%s]%s:%d (%v:%v bytes)\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Proxy.Host, ctx.Remote.Host, ctx.Remote.Port, ctx.Client.ReadCount, ctx.Remote.ReadCount)
+			ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed: [%s]:%d -> [%s]%s:%d (%v:%v bytes)\n", ctx.Client.Host, ctx.Client.Port, ctx.Proxy.Host, ctx.Remote.Host, ctx.Remote.Port, ctx.Client.ReadCount, ctx.Remote.ReadCount)
 		} else {
-			ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed: %s -> %s:%d (%v:%v bytes)\n", ctx.Client.Connection.RemoteAddr().String(), ctx.Remote.Host, ctx.Remote.Port, ctx.Client.ReadCount, ctx.Remote.ReadCount)
+			ctx.Ctx.Logger <- fmt.Sprintf(" [-] Closed: [%s]:%d -> %s:%d (%v:%v bytes)\n", ctx.Client.Host, ctx.Client.Port, ctx.Remote.Host, ctx.Remote.Port, ctx.Client.ReadCount, ctx.Remote.ReadCount)
 		}
 	}
 }
