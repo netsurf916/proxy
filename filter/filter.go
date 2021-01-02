@@ -161,6 +161,7 @@ func (ctx *Filter) LoadHTTP(url string) (bool, int) {
 	resp, err := http.Get(url)
 	temp := ""
 	count := 0
+	skip := false
 	var list []string
 	if err != nil {
 		return false, count
@@ -172,19 +173,33 @@ func (ctx *Filter) LoadHTTP(url string) (bool, int) {
 	}
 	// Parse the result for lines of text
 	for _, char := range body {
-		if char != '\n' && char != '\r' {
-			temp += string(char)
-		} else {
+		if char == '#' {
+			skip = true
+			continue
+		}
+		if char == '\n' || char == '\r' {
+			skip = false
 			if len(temp) == 0 {
 				continue
 			}
-			temp = strings.ToLower(temp)
-			if len(temp) > 0 {
-				list = append(list, temp)
-				temp = ""
-				count++
-			}
+			// Drop extraneous spaces and add to list
+			list = append(list, strings.TrimSpace(temp))
+			temp = ""
+			count++
+			continue
 		}
+		if skip {
+			continue
+		}
+		// Convert tabs to space
+		if char == '\t' {
+			char = ' '
+		}
+		if char == ' ' && temp[len(temp)-1] == ' ' {
+			// Avoid adding duplicate spaces
+			continue
+		}
+		temp += string(char)
 	}
 	// Parse the individual lines
 	for _, line := range list {
@@ -192,14 +207,15 @@ func (ctx *Filter) LoadHTTP(url string) (bool, int) {
 		if len(line) == 0 {
 			continue
 		}
+		// Make lower case
+		line = strings.ToLower(line)
 		// Skip comments
-		line = strings.ToLower(strings.Trim(line, " "))
 		if line[0] == '#' {
 			continue
 		}
 		// Take the last entry in case of something like "<IP> <domain>"
 		elements := strings.Split(line, " ")
-		if len(elements) > 1 {
+		if len(elements) == 2 {
 			line = elements[len(elements)-1]
 		}
 		ctx.Domains = append(ctx.Domains, DomainEntry{line, 0})
@@ -214,6 +230,10 @@ func (ctx *Filter) deduplicate() {
 		add := true
 		for _, domainEntryCompare := range ctx.Domains[i+1:] {
 			if domainEntry.Matches(domainEntryCompare.Name) {
+				// Attempt to preserve hit counts
+				if domainEntryCompare.Hits == 0 {
+					domainEntryCompare.Hits = domainEntry.Hits
+				}
 				add = false
 				break
 			}

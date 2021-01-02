@@ -25,8 +25,9 @@ func main() {
 	hostPtr := flag.String("host", "0.0.0.0", "Public address of the proxy (IP or hostname).")
 	proxiesPtr := flag.String("proxies", "", "A JSON formatted file containing outbound proxies to use.")
 	blacklistPtr := flag.String("blacklist", "blacklist.json", "Blacklist file to use (JSON formatted).")
-	updateblacklistPtr := flag.String("updateblacklist", "", "File containing additional blacklist URLs to import.")
-	updateblacklistURLPtr := flag.String("updateblacklisturl", "", "URL with additional blacklist URLs to import.")
+	updatePtr := flag.Bool("update", false, "Pull new blacklist info from built-in URLS.")
+	updatefromfilePtr := flag.String("updatefile", "", "File containing additional blacklist URLs to import.")
+	updatefromURLPtr := flag.String("updateurl", "", "URL with additional blacklist URLs to import.")
 	flag.Parse()
 
 	// Socks5 context
@@ -62,11 +63,11 @@ func main() {
 		}
 	}
 
-	// Initialize the filter
-	if !Socks5Ctx.DomainFilter.LoadFile(*blacklistPtr) {
+	// Initialize the filter (this makes it possible to specify a non-existent file and update)
+	if !Socks5Ctx.DomainFilter.LoadFile(*blacklistPtr) || *updatePtr {
 		// Load some external blacklists to create the initial list
 		ExternalLists := []string{
-			"https://mirror1.malwaredomains.com/files/justdomains",
+			"https://winhelp2002.mvps.org/hosts.txt",
 		}
 		for _, s := range ExternalLists {
 			ok, count := Socks5Ctx.DomainFilter.LoadHTTP(s)
@@ -77,20 +78,20 @@ func main() {
 			}
 		}
 	}
-	if len(*updateblacklistPtr) > 0 {
-		ok, count := Socks5Ctx.DomainFilter.LoadListFile(*updateblacklistPtr)
+	if len(*updatefromfilePtr) > 0 {
+		ok, count := Socks5Ctx.DomainFilter.LoadListFile(*updatefromfilePtr)
 		if ok {
-			fmt.Printf(" [+] Loaded %d domains from: \"%s\"\n", count, *updateblacklistPtr)
+			fmt.Printf(" [+] Loaded %d domains from: \"%s\"\n", count, *updatefromfilePtr)
 		} else {
-			fmt.Printf(" [+] Error loading blacklist: \"%s\"\n", *updateblacklistPtr)
+			fmt.Printf(" [+] Error loading blacklist: \"%s\"\n", *updatefromfilePtr)
 		}
 	}
-	if len(*updateblacklistURLPtr) > 0 {
-		ok, count := Socks5Ctx.DomainFilter.LoadHTTP(*updateblacklistURLPtr)
+	if len(*updatefromURLPtr) > 0 {
+		ok, count := Socks5Ctx.DomainFilter.LoadHTTP(*updatefromURLPtr)
 		if ok {
-			fmt.Printf(" [+] Loaded %d domains from: \"%s\"\n", count, *updateblacklistURLPtr)
+			fmt.Printf(" [+] Loaded %d domains from: \"%s\"\n", count, *updatefromURLPtr)
 		} else {
-			fmt.Printf(" [+] Error loading blacklist: \"%s\"\n", *updateblacklistURLPtr)
+			fmt.Printf(" [+] Error loading blacklist: \"%s\"\n", *updatefromURLPtr)
 		}
 	}
 	// Always write it back out to save changes (additions, deduplications, etc)
