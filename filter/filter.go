@@ -41,9 +41,9 @@ type Filter struct {
 
 // Matches a string against all domain names in the filter
 func (ctx *Filter) Matches(item string) bool {
-	for _, domainEntry := range ctx.Domains {
+	for i, domainEntry := range ctx.Domains {
 		if domainEntry.Matches(strings.ToLower(item)) {
-			domainEntry.Hits++
+			ctx.Domains[i].Hits++
 			return true
 		}
 	}
